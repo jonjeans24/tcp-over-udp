@@ -13,6 +13,7 @@ import pickle
 import math
 
 import checksum
+import message
 
 
 def Main():
@@ -43,10 +44,14 @@ def Main():
     num_of_packets = int(file_size) / 1024   # NUMBER OF PACKETS EXPECTED
     num_of_packets = math.ceil(num_of_packets)
 
+    new_message = message.Message()                         # determines the size of the message to hold all packets
+    new_message.original_message = [None] * num_of_packets
+
     print("Receiving File: " + file_name)
 
     concat_file_bits = b''                  # USED TO CREATE FILE FROM SENDER
     i = 0
+    j = 0
     state = "ACK"
 
     while True:
@@ -55,7 +60,11 @@ def Main():
         seq = packet[1]
         if checksum.validate_checksum(packet[0],packet[1],packet[2],packet[3]): # IF TRUE "ACK"
             print(str(i) + " RECEIVE: " + packet[0] + ", SEQ: " + str(packet[1]))
-            concat_file_bits += packet[2]
+
+            j = int(packet[1]) / 1024       # ADDS PACKET TO CORRECT LOCATION IN MESSAGE/FILE LIST
+            j = math.ceil(j)
+            new_message.original_message[j] = packet[2]
+
             if int(file_size) < 1024:        # ADD SIZE OF DATA TO SEQ NUMBER
                 seq += int(file_size)
             else:
@@ -78,8 +87,12 @@ def Main():
             print(":::SENDING - " + packet[0] + ", SEQ - " + str(packet[1]))
             msg = pickle.dumps(packet)
             s.sendto(msg, addr)
-        if i >= num_of_packets:
-            break   # no more packets
+
+        if new_message.check_for_none():
+            break
+
+    for x in range(num_of_packets):                         # construct the file by concatenating the packets
+        concat_file_bits += new_message.original_message[x]
 
     new_file = open(file_name, 'wb')
     new_file.write(concat_file_bits)
