@@ -31,12 +31,13 @@ class Message:
         rand_num = random.randrange(1, 101)  # GENERATES RANDOM NUMBER BETWEEN 1 AND 100
         if rand_num <= error_percentage:
             packet = Message.create_error_packet(self, state, seq, data)
-            print(":::SENT CORRUPTED PACKET:::")
+            print("\t:::SENT CORRUPTED PACKET:::")
         else:
             packet = Message.create_packet(self, state, seq, data)
         return packet
 
-    # function that creates a list of packets for entire file being sent
+    # Function that creates a list of packets for entire file being sent.
+    # Used by the sender to construct all the packets that will be sent.
     def create_message(self, file_name, num_of_packets, file_size):
         state = "START"                                                     # STATE = START
         seq = 0
@@ -65,7 +66,16 @@ class Message:
 
         in_file.close()
 
-    # function used to check if all packets were attained
+    # Function reconstructs the file with all of the packets in the message list.
+    # Is used by receiver after all packets have been received.
+    def reconstruct_file(self, num_of_packets):
+        concat_file_bits = b''
+        for x in range(num_of_packets):  # construct the file by concatenating the packets
+            concat_file_bits += self.original_message[x]
+        return concat_file_bits
+
+    # Function used to check if all packets were attained.
+    # If a None is found in the list, then not all packets have been received.
     def check_for_none(self):
         for x in self.original_message:
             if x is None:
