@@ -64,3 +64,10 @@ class Message:
                 i += 1
 
         in_file.close()
+
+    # function used to check if all packets were attained
+    def check_for_none(self):
+        for x in self.original_message:
+            if x is None:
+                return False
+        return True

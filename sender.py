@@ -20,6 +20,7 @@ import sys
 import math
 
 import message
+import window
 
 
 # ERROR CHECKING FOR THE ARGUMENTS ENTERED BY THE USER
@@ -51,7 +52,7 @@ def Main():
     # Error checking to verify fields are integer values
     try:
         port = 5001#int(sys.argv[3]) #TODO uncomment when program is ready
-        error = 15 #int(sys.argv[4])
+        error = 20 #int(sys.argv[4])
     except:
         print("Error: An invalid integer was entered")
         print("Check your <port> and <error> values.")
@@ -107,35 +108,47 @@ def Main():
         original_file = message.Message()           # CREATES MESSAGE FROM ORIGINAL FILE
         original_file.create_message(file_name, num_of_packets, file_size)
 
+        window_frame = window.Window(num_of_packets)    # initializes a window list of booleans as well as window
+
         i = 0
+        j = 0
         seq = 0
         while True:
             if i == num_of_packets:
                 break
 
-            # either sends correct packet or corrupt packet
-            curr_packet = original_file.original_message[i]
-            curr_packet = pickle.loads(curr_packet)
-            curr_state = curr_packet[0]
-            curr_seq = curr_packet[1]
-            curr_data = curr_packet[2]
+            print("\tCURRENT WINDOW (" + str(i) + " - " + str(i + 4) + ")")
+            for x in range(window_frame.window):
 
-            curr_packet = original_file.determine_packet(curr_state, curr_seq, curr_data, error)
+                if not window_frame.window_list[i]:
+                    curr_packet = original_file.original_message[i]     # either sends correct packet or corrupt packet
+                    curr_packet = pickle.loads(curr_packet)
+                    curr_state = curr_packet[0]
+                    curr_seq = curr_packet[1]
+                    curr_data = curr_packet[2]
 
-            msg = pickle.dumps(curr_packet)
-            s.sendto(msg, addr)
+                    curr_packet = original_file.determine_packet(curr_state, curr_seq, curr_data, error)
 
-            ack, addr = s.recvfrom(buffer)  # RECEIVE ACK FROM RECEIVER
-            packet = pickle.loads(ack)
-            print(str(i) + " RECEIVE: " + packet[0] + ", SEQ: " + str(packet[1]))
-            if packet[1] == seq + 1024 + 1 or packet[1] == seq + file_size + 1:
+                    msg = pickle.dumps(curr_packet)
+                    s.sendto(msg, addr)
+
+                    ack, addr = s.recvfrom(buffer)  # RECEIVE ACK FROM RECEIVER
+                    packet = pickle.loads(ack)
+                    print(str(i) + " RECEIVE: " + packet[0] + ", SEQ: " + str(packet[1]))
+
+                    if packet[1] == curr_seq + 1024 + 1 or packet[1] == curr_seq + file_size + 1:
+                        window_frame.window_list[i] = True
+
+                    elif packet[1] >= file_size:
+                        break
                 i += 1
-                seq += 1024
-            elif packet[1] >= file_size:
-                break
-            else:
-                if seq == 0:
-                    seq = 0
+
+            i = window_frame.move_window(j)
+            if i >= num_of_packets - 5:
+                i = num_of_packets - 5
+                if window_frame.check_for_false():
+                    break
+            j = i
 
         print("...File Transfer complete")
 
