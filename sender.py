@@ -1,8 +1,8 @@
 # sender.py
 # Jonathan Jeans
-# 10/07/2017
+# 11/10/2017
 # Networking
-# Assignment 2 - Phase 1
+# Assignment 2 - Phase 2
 
 # THIS PROGRAM IS RUN AFTER THE RECEIVER.PY PROGRAM HAS BEEN STARTED. THIS PROGRAM MUST BE RUN FROM THE
 # COMMAND LINE/TERMINAL WITH THE FOLLOWING SYNTAX:
@@ -18,6 +18,7 @@ import pickle
 import os
 import sys
 import math
+# import socket.timeout as TimeoutException
 
 import message
 import window
@@ -32,9 +33,9 @@ def check_for_error(file_name, port, error):
         print("File Exists: FAILURE")
         print(check_format)
         sys.exit()
-    if port == 5000:            # port 5000 currently reserved for the receiver
+    if port == 5000:            # port 5000 currently reserved for the sender (hard-coded)
         print("Port Available: FAILURE")
-        print("Port 5000 is reserved for the receiver")
+        print("Port 5000 is reserved for the sender")
         print(check_format)
         sys.exit()
     else:
@@ -48,18 +49,18 @@ def check_for_error(file_name, port, error):
         print("Valid Error: SUCCESS")
 
 
-def Main():
+def main():
     # Error checking to verify fields are integer values
     try:
-        port = 5001#int(sys.argv[3]) #TODO uncomment when program is ready
-        error = 20 #int(sys.argv[4])
+        port = 5001  # int(sys.argv[3]) #TODO uncomment when program is ready
+        error = 20  # int(sys.argv[4])
     except:
         print("Error: An invalid integer was entered")
         print("Check your <port> and <error> values.")
         sys.exit()
 
-    host = '127.0.0.1' #sys.argv[2]
-    file_name = 'baby.jpg' #sys.argv[1]
+    host = '127.0.0.1'  # sys.argv[2]
+    file_name = 'baby.jpg'  # sys.argv[1]
     buffer = 1472
 
     check_for_error(file_name, port, error)
@@ -74,7 +75,6 @@ def Main():
         print("An invalid host was entered.")
         print("Check Format: sender.py <file> <host> <port> <error>")
         sys.exit()
-
 
     print("Sender Started...")
 
@@ -111,48 +111,57 @@ def Main():
         window_frame = window.Window(num_of_packets)    # initializes a window list of booleans as well as window
 
         i = 0
-        j = 0
-        seq = 0
+        start_of_window = 0
+        s.settimeout(.1)                            # set the time for packet timeout
         while True:
             if i == num_of_packets:
                 break
 
-            print("\tCURRENT WINDOW (" + str(i) + " - " + str(i + 4) + ")")
+            print("CURRENT WINDOW (" + str(i) + " - " + str(i + 4) + ")")
             for x in range(window_frame.window):
 
-                if not window_frame.window_list[i]:
-                    curr_packet = original_file.original_message[i]     # either sends correct packet or corrupt packet
-                    curr_packet = pickle.loads(curr_packet)
-                    curr_state = curr_packet[0]
-                    curr_seq = curr_packet[1]
-                    curr_data = curr_packet[2]
+                if not window_frame.window_list[i]:                   # Looks to see if an ack has been received
+                    curr_packet = original_file.original_message[i]   # either sends correct packet or corrupt packet
+                    curr_packet = pickle.loads(curr_packet)           # loads packet from message list into curr_packet
+                    curr_state, curr_seq, curr_data = curr_packet[0], curr_packet[1], curr_packet[2]
 
                     curr_packet = original_file.determine_packet(curr_state, curr_seq, curr_data, error)
 
                     msg = pickle.dumps(curr_packet)
                     s.sendto(msg, addr)
 
-                    ack, addr = s.recvfrom(buffer)  # RECEIVE ACK FROM RECEIVER
-                    packet = pickle.loads(ack)
-                    print(str(i) + " RECEIVE: " + packet[0] + ", SEQ: " + str(packet[1]))
+                    # This section is used for packet timeouts
+                    try:
+                        ack, addr = s.recvfrom(buffer)  # RECEIVE ACK FROM RECEIVER
+                        packet = pickle.loads(ack)
+                        print("\t" + str(i) + " RECEIVE: " + packet[0] + ", SEQ: " + str(packet[1]))
 
-                    if packet[1] == curr_seq + 1024 + 1 or packet[1] == curr_seq + file_size + 1:
-                        window_frame.window_list[i] = True
+                        if packet[1] == curr_seq + 1024 + 1 or packet[1] == curr_seq + file_size + 1:
+                            window_frame.window_list[i] = True
 
-                    elif packet[1] >= file_size:
+                        elif packet[1] >= file_size:
+                            break
+                    except:
+                        print("\tERROR: Segment #" + str(curr_seq) + " - timeout")
+                        i -= 1
+                        continue
+                    if packet[1] >= file_size:
                         break
                 i += 1
 
-            i = window_frame.move_window(j)
+            # starts at j (start_of_window) and looks for next position in window that is false
+            # if position is not found then window moves 5 positions forward
+            # if window is in the last five positions then it doesn't move
+            i = window_frame.move_window(start_of_window)
             if i >= num_of_packets - 5:
                 i = num_of_packets - 5
                 if window_frame.check_for_false():
                     break
-            j = i
+            start_of_window = i
 
         print("...File Transfer complete")
 
     s.close()
 
 if __name__ == '__main__':
-    Main()
+    main()

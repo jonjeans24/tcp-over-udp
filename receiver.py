@@ -1,8 +1,8 @@
 # receiver.py
 # Jonathan Jeans
-# 10/07/2017
+# 11/10/2017
 # Networking
-# Assignment 2 - Phase 1
+# Assignment 2 - Phase 2
 
 
 # THIS PROGRAM IS USED WITH THE SENDER.PY PROGRAM. THIS PROGRAM MUST BE RUN FIRST, THEN THE SENDER.PY
@@ -11,6 +11,7 @@
 import socket
 import pickle
 import math
+import random
 
 import checksum
 import message
@@ -49,21 +50,24 @@ def Main():
 
     print("Receiving File: " + file_name)
 
-    concat_file_bits = b''                  # USED TO CREATE FILE FROM SENDER
     i = 0
-    j = 0
     state = "ACK"
-
     while True:
         data, addr = s.recvfrom(buffer)
         packet = pickle.loads(data)
         seq = packet[1]
+
         if checksum.validate_checksum(packet[0],packet[1],packet[2],packet[3]): # IF TRUE "ACK"
             print(str(i) + " RECEIVE: " + packet[0] + ", SEQ: " + str(packet[1]))
 
             j = int(packet[1]) / 1024       # ADDS PACKET TO CORRECT LOCATION IN MESSAGE/FILE LIST
             j = math.ceil(j)
-            new_message.original_message[j] = packet[2]
+            if new_message.original_message[j] is None:
+                new_message.original_message[j] = packet[2]
+            else:
+                print("\tERROR: Segment #" + str(packet[1]) + " duplicate")
+                if packet[0] == "END":
+                    new_message.original_message[j] = None
 
             if int(file_size) < 1024:        # ADD SIZE OF DATA TO SEQ NUMBER
                 seq += int(file_size)
@@ -73,26 +77,29 @@ def Main():
             packet[1] = seq + 1              # ACK N+1 FOR SEQUENCE NUMBER
             packet[2] = ""
             msg = pickle.dumps(packet)
-            s.sendto(msg, addr)
-            i += 1
+
+            rand_num = random.randrange(1, 101)  # GENERATES RANDOM NUMBER BETWEEN 1 AND 100
+            if rand_num >= 10:                   # 10% chance that a packet will drop
+                s.sendto(msg, addr)
+                i += 1
+
         else:
             # if checksums are not equivalent then the packet is corrupted and last ACK sent to sender
-            print("ERROR: Expected packet #" + checksum.generate_checksum(packet[0],packet[1],packet[2]))
+            print("\tERROR: Expected packet #" + checksum.generate_checksum(packet[0], packet[1], packet[2]))
             packet[0] = state
             if packet[1] == 0:
                 packet[1] = 0
             else:
-                packet[1] -= 1024       # SEQ FOR LAST PACKET IF NOT FIRST PACKET
+                packet[1] -= 1024       # SEQ FOR LAST PACKET IF NOT FIRST PACKET todo write function for finding seq #
             packet[2] = ""
-            print(":::SENDING - " + packet[0] + ", SEQ - " + str(packet[1]))
+            print("\t:::SENDING - " + packet[0] + ", SEQ - " + str(packet[1]) + ":::")
             msg = pickle.dumps(packet)
             s.sendto(msg, addr)
 
         if new_message.check_for_none():
             break
 
-    for x in range(num_of_packets):                         # construct the file by concatenating the packets
-        concat_file_bits += new_message.original_message[x]
+    concat_file_bits = new_message.reconstruct_file(num_of_packets)  # construct the file by concatenating the packets
 
     new_file = open(file_name, 'wb')
     new_file.write(concat_file_bits)
