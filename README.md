@@ -7,4 +7,5 @@ This program does the following:
 * generates random errors
 * randomly drops packets being sent
 * randomly drops ACKs being sent back to the origin
+* uses a window of size 5 to send packets; window moves as ACKs are received for packets
 * reconstructs the packets to recreate the original file
